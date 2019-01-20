@@ -23,22 +23,31 @@ let parsePatternWs = parsePattern .>> ws
 
 let reserved = [ "let"; "in"; "fun"; "match"; "if"; "then"; "else"; "true"; "false"; "when"; "fix"; "rec"; "open"; "print"; "error" ]
 
-let makeIdent first =
+let positionItem (p1: FParsec.Position) (p2: FParsec.Position) value = 
+    {
+        Start = { Line = int p1.Line; Column = int p1.Column }
+        End = { Line = int p2.Line; Column = int p2.Column }
+        Value = value
+    }
+
+let makeIdent p1 first =
     first .>>. many (lower <|> pchar '_' <|> digit) |>> (List.Cons >> Array.ofList >> String)
-    >>= (fun s ->
+    .>>. getPosition
+    >>= (fun (s, p2) ->
         if reserved |> List.exists ((=) s) then 
             fail "reserved"
         else
-            preturn s
+            positionItem p1 p2 s
+            |> preturn 
     )
     
 
-let internalIdent: Parser<string> = makeIdent (pchar '_')
+let internalIdent p1 : Parser<Located<string>> = makeIdent p1 (pchar '_')
 
-let externalIdent: Parser<string> = makeIdent lower
+let externalIdent p1 : Parser<Located<string>> = makeIdent p1 lower
 
-let ident = attempt internalIdent <|> externalIdent 
-let identWs = ident .>> ws
+let ident p1 = attempt (internalIdent p1) <|> (externalIdent p1)
+let identWs p1 = ident p1 .>> ws
 
 let parseBool : Parser<Expr> =
     (stringReturn "true" (EBool true))

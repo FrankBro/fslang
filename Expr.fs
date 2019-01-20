@@ -148,6 +148,17 @@ with
 and Pattern = Expr
 and Guard = Expr
 
+type Position =  {
+    Line:int
+    Column: int
+}
+
+type Located<'t> = {
+    Start: Position
+    End: Position
+    Value: 't
+}
+
 type Value =
     | VBool of bool
     | VInt of int
