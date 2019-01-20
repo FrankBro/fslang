@@ -24,15 +24,16 @@ let parsePatternWs = parsePattern .>> ws
 let reserved = [ "let"; "in"; "fun"; "match"; "if"; "then"; "else"; "true"; "false"; "when"; "fix"; "rec"; "open"; "print"; "error" ]
 
 let internalIdent: Parser<string> =
-    pstring "_" >>. many1 (lower <|> digit) |>> (Array.ofList >> String)
-    >>= fun s ->
+    pchar '_' .>>. many1 (lower <|> pchar '_' <|> digit) |>> (List.Cons >> Array.ofList >> String)
+    >>= (fun s ->
         if reserved |> List.exists ((=) s) then 
             fail "reserved"
         else
             preturn ("_" + s)
+    )
 
 let externalIdent: Parser<string> =
-    many1 lower |>> (Array.ofList >> String)
+    lower .>>. many1 (lower <|> pchar '_' <|> digit) |>> (List.Cons >> Array.ofList >> String)
     >>= fun s ->
         if reserved |> List.exists ((=) s) then 
             fail "reserved"
