@@ -10,6 +10,20 @@ type Name = String
 type Id = int
 type Level = int
 
+type Position =  {
+    Line:int
+    Column: int
+}
+
+type Located<'t> = {
+    Filename: string
+    Start: Position
+    End: Position
+    Value: 't
+}
+with
+    override x.ToString () = x.Value.ToString()
+
 type Ty =
     | TConst of Name
     | TBool
@@ -93,29 +107,29 @@ type UnOp =
     | Negative
 
 type Expr =
-    | EPrint of Expr
+    | EPrint of Located<Expr>
     | EBool of bool
     | EInt of int
     | EFloat of float
     | EString of string
     | EVar of Name
-    | ECall of Expr * Expr
-    | EFun of Pattern * Expr
-    | ELet of Pattern * Expr * Expr
-    | ERecordSelect of Expr * Name
-    | ERecordExtend of Name * Expr * Expr
-    | ERecordRestrict of Expr * Name
+    | ECall of Located<Expr> * Located<Expr>
+    | EFun of Located<Pattern> * Located<Expr>
+    | ELet of Located<Pattern> * Located<Expr> * Located<Expr>
+    | ERecordSelect of Located<Expr> * Name
+    | ERecordExtend of Name * Located<Expr> * Located<Expr>
+    | ERecordRestrict of Located<Expr> * Name
     | ERecordEmpty
-    | EVariant of Name * Expr
-    | ECase of Expr * (Pattern * Expr * Guard option) list * (Name * Expr) option
-    | EIfThenElse of Expr * Expr * Expr
-    | EBinOp of Expr * BinOp * Expr
-    | EUnOp of UnOp * Expr
+    | EVariant of Name * Located<Expr>
+    | ECase of Located<Expr> * (Located<Pattern> * Located<Expr> * Located<Guard> option) list * (Name * Located<Expr>) option
+    | EIfThenElse of Located<Expr> * Located<Expr> * Located<Expr>
+    | EBinOp of Located<Expr> * BinOp * Located<Expr>
+    | EUnOp of UnOp * Located<Expr>
     | EFix of Name
     | EListEmpty
-    | EListCons of Expr * Expr
+    | EListCons of Located<Expr> * Located<Expr>
     | EOpen of string
-    | EType of Expr * Ty
+    | EType of Located<Expr> * Ty
     | EError of string
 with
     override x.ToString () =
@@ -147,17 +161,6 @@ with
 
 and Pattern = Expr
 and Guard = Expr
-
-type Position =  {
-    Line:int
-    Column: int
-}
-
-type Located<'t> = {
-    Start: Position
-    End: Position
-    Value: 't
-}
 
 type Value =
     | VBool of bool
@@ -316,7 +319,7 @@ let stringOfUnOp = function
 let stringOfExpr (x: Expr) : string =
     let rec f isSimple = function
         | EError s -> sprintf "error \"%s\"" s
-        | EPrint e -> sprintf "print %s" (f false e)
+        | EPrint e -> sprintf "print %s" (f false e.Value)
         | EFix name -> sprintf "fix %s" name
         | EBool bool -> sprintf "%b" bool
         | EInt int -> sprintf "%d" int
@@ -324,35 +327,35 @@ let stringOfExpr (x: Expr) : string =
         | EString string -> string
         | EVar name -> name
         | ECall (fnExpr, argExpr) ->
-            let fnStr = f true fnExpr
-            let argStr = f false argExpr
+            let fnStr = f true fnExpr.Value
+            let argStr = f false argExpr.Value
             sprintf "%s %s" fnStr argStr
         | EFun (pattern, bodyExpr) ->
             let funStr = 
                 sprintf "fun %s -> %s" 
-                    (f false pattern)
-                    (f false bodyExpr)
+                    (f false pattern.Value)
+                    (f false bodyExpr.Value)
             if isSimple then "(" + funStr + ")" else funStr
         | ELet (pattern, valueExpr, bodyExpr) ->
             let letStr =
                 sprintf "let %s = %s in %s"
-                    (f false pattern)
-                    (f false valueExpr)
-                    (f false bodyExpr)
+                    (f false pattern.Value)
+                    (f false valueExpr.Value)
+                    (f false bodyExpr.Value)
             if isSimple then "(" + letStr + ")" else letStr
         | ERecordEmpty -> "{}"
         | EVariant (label, value) ->
-            let variantStr = ":" + label + " " + f true value 
+            let variantStr = ":" + label + " " + f true value.Value 
             if isSimple then "(" + variantStr + ")" else variantStr
-        | ERecordSelect (recordExpr, label) -> f true recordExpr + "." + label
-        | ERecordRestrict (recordExpr, label) -> "{" + f false recordExpr + " - " + label + "}"
+        | ERecordSelect (recordExpr, label) -> f true recordExpr.Value + "." + label
+        | ERecordRestrict (recordExpr, label) -> "{" + f false recordExpr.Value + " - " + label + "}"
         | ERecordExtend (name, valueExpr, restExpr) ->
             let rec g str = function
                 | ERecordEmpty -> str
                 | ERecordExtend (label, valueExpr, restExpr) ->
-                    g (str + ", " + label + " = " + f false valueExpr) restExpr
+                    g (str + ", " + label + " = " + f false valueExpr.Value) restExpr.Value
                 | otherExpr -> str + " | " + f false otherExpr
-            "{" + g (name + " = " + f false valueExpr) restExpr + "}"
+            "{" + g (name + " = " + f false valueExpr.Value) restExpr.Value + "}"
         | ECase (expr, cases, oDefault) ->
             let caseStrList = 
                 cases
@@ -360,33 +363,33 @@ let stringOfExpr (x: Expr) : string =
                     let guard =
                         match oGuard with
                         | None -> ""
-                        | Some guard -> sprintf " when %O" (f false guard)
-                    f false pattern + guard + " -> " + f false expr
+                        | Some guard -> sprintf " when %O" (f false guard.Value)
+                    f false pattern.Value + guard + " -> " + f false expr.Value
                 )
                 |> String.concat ", "
             let defaultStr =
                 match oDefault with
                 | None -> ""
-                | Some (name, expr) -> sprintf "| %s -> %s" name (f false expr)
-            "match " + f false expr + " { " + caseStrList + defaultStr + " } "
+                | Some (name, expr) -> sprintf "| %s -> %s" name (f false expr.Value)
+            "match " + f false expr.Value + " { " + caseStrList + defaultStr + " } "
         | EIfThenElse (ifExpr, thenExpr, elseExpr) ->
-            let a = f false ifExpr
-            let b = f false thenExpr
-            let c = f false elseExpr
+            let a = f false ifExpr.Value
+            let b = f false thenExpr.Value
+            let c = f false elseExpr.Value
             sprintf "if %s then %s else %s" a b c
         | EBinOp (a, op, b) ->
-            let a = f false a
+            let a = f false a.Value
             let op = stringOfBinOp op
-            let b = f false b
+            let b = f false b.Value
             sprintf "%s %s %s" a op b
         | EUnOp (op, a) ->
-            let a = f false a
+            let a = f false a.Value
             let op = stringOfUnOp op
             sprintf "%s%s" op a
         | EListEmpty -> "[]"
-        | EListCons (x, xs) -> sprintf "%s :: %s" (f false x) (f false xs)
+        | EListCons (x, xs) -> sprintf "%s :: %s" (f false x.Value) (f false xs.Value)
         | EOpen filename -> sprintf "open \"%s\"" filename
-        | EType (e, t) -> sprintf "(%s: %s)" (f false e) (stringOfTy t)
+        | EType (e, t) -> sprintf "(%s: %s)" (f false e.Value) (stringOfTy t)
     f false x
 
 let rec stringOfValue value =

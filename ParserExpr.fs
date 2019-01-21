@@ -23,31 +23,23 @@ let parsePatternWs = parsePattern .>> ws
 
 let reserved = [ "let"; "in"; "fun"; "match"; "if"; "then"; "else"; "true"; "false"; "when"; "fix"; "rec"; "open"; "print"; "error" ]
 
-let positionItem (p1: FParsec.Position) (p2: FParsec.Position) value = 
-    {
-        Start = { Line = int p1.Line; Column = int p1.Column }
-        End = { Line = int p2.Line; Column = int p2.Column }
-        Value = value
-    }
-
-let makeIdent p1 first =
+let makeIdent file first =
     first .>>. many (lower <|> pchar '_' <|> digit) |>> (List.Cons >> Array.ofList >> String)
-    .>>. getPosition
-    >>= (fun (s, p2) ->
-        if reserved |> List.exists ((=) s) then 
+    |> locate file
+    >>= (fun s ->
+        if reserved |> List.exists ((=) s.Value) then 
             fail "reserved"
         else
-            positionItem p1 p2 s
-            |> preturn 
+            preturn s
     )
     
 
-let internalIdent p1 : Parser<Located<string>> = makeIdent p1 (pchar '_')
+let internalIdent file : Parser<Located<string>> = makeIdent file (pchar '_')
 
-let externalIdent p1 : Parser<Located<string>> = makeIdent p1 lower
+let externalIdent file : Parser<Located<string>> = makeIdent file lower
 
-let ident p1 = attempt (internalIdent p1) <|> (externalIdent p1)
-let identWs p1 = ident p1 .>> ws
+let ident file = attempt (internalIdent file) <|> (externalIdent file)
+let identWs file = ident file .>> ws
 
 let parseBool : Parser<Expr> =
     (stringReturn "true" (EBool true))
@@ -87,13 +79,13 @@ let stringLiteral =
     let normalCharSnippet  = manySatisfy (fun c -> c <> '"' && c <> '\\')
 
     between (str "\"") (str "\"")
-            (stringsSepBy normalCharSnippet escapedCharSnippet)
+        (stringsSepBy normalCharSnippet escapedCharSnippet)
 
 let parseString : Parser<Expr> = stringLiteral |>> EString
     
-let parseFun : Parser<Expr> =
-    let p1 = strWs1 "fun" >>. many1 parsePatternWs
-    let p2 = strWs "->" >>. parseExprWs
+let parseFun file : Parser<Located<Expr>> =
+    let p1 = strWs1 "fun" >>. many1 (locate file parsePatternWs)
+    let p2 = strWs "->" >>. (locate file parseExprWs)
     pipe2 p1 p2 (fun patterns body ->
         (patterns, body)
         ||> List.foldBack (fun pattern state ->

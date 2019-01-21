@@ -96,13 +96,13 @@ let rec extractBindingsAndVariantGuards pattern var bindings guards =
     | ERecordEmpty -> bindings, guards
     | ERecordExtend (field, fieldPattern, record) ->
         let fieldAccess = sprintf "%s.%s" var field
-        let map, guards = extractBindingsAndVariantGuards fieldPattern fieldAccess bindings guards
-        extractBindingsAndVariantGuards record var map guards
+        let map, guards = extractBindingsAndVariantGuards fieldPattern.Value fieldAccess bindings guards
+        extractBindingsAndVariantGuards record.Value var map guards
     | EVariant (name, variant) ->
         let fieldAccess = sprintf "%s.variant_%s" var name
         let guard = sprintf "%s.variant_name = %s" var name
         let guards = guard :: guards
-        extractBindingsAndVariantGuards variant fieldAccess bindings guards
+        extractBindingsAndVariantGuards variant.Value fieldAccess bindings guards
     | _ -> failwithf "impossible, got pattern %O" pattern
 
 let extractValueGuard guard bindings =
@@ -114,7 +114,7 @@ let extractValueGuard guard bindings =
     | EString s -> sprintf "'%s'" s
     | _ -> failwithf "impossible, got guard %O" guard
 
-let rec emitCaseExpr oAssignVar map value (cases: (Pattern * Expr * Guard option) list) (oDefault: (Name * Expr) option) =
+let rec emitCaseExpr oAssignVar map value cases oDefault =
     let valueVar =
         match value with
         | EVar name -> name
@@ -126,25 +126,25 @@ let rec emitCaseExpr oAssignVar map value (cases: (Pattern * Expr * Guard option
     let cases =
         cases
         |> List.map (fun (pattern, body, oGuard) ->
-            let bindings, guards = extractBindingsAndVariantGuards pattern valueVar Map.empty []
+            let bindings, guards = extractBindingsAndVariantGuards pattern.Value valueVar Map.empty []
             let guards =
                 match oGuard with
                 | None -> guards
                 | Some guard -> 
-                    emitExpr None bindings guard :: guards
+                    emitExpr None bindings guard.Value :: guards
             let guard =
                 match guards with
                 | [] -> failwith "invalid, will always match"
                 | guards -> 
                     guards
                     |> String.concat " and "
-            sprintf "if %s then\n%s\n" guard (emitExpr (Some assignVar) bindings body)
+            sprintf "if %s then\n%s\n" guard (emitExpr (Some assignVar) bindings body.Value)
         )
         |> String.concat "else"
     let def =
         match oDefault with
         | Some (var, body) -> 
-            sprintf "else\nlocal %s = %s\n%s\nend" var valueVar (emitExpr (Some var) map body)
+            sprintf "else\nlocal %s = %s\n%s\nend" var valueVar (emitExpr (Some var) map body.Value)
         | None -> sprintf "else\nerror('no match')\nend"
     match oAssignVar with
     | Some _ -> cases + def
@@ -163,47 +163,47 @@ and emitExpr oAssignVar map expr =
     | EString s -> sprintf "'%s'" s
     | EVar name -> getVar name
     | ECall (fn, arg) ->
-        sprintf "%s(%s)" (emitExpr None map fn) (emitExpr None map arg)
-    | EFun (EVar name, body) ->
+        sprintf "%s(%s)" (emitExpr None map fn.Value) (emitExpr None map arg.Value)
+    | EFun ({Value = EVar name}, body) ->
         let var = getNewVar ()
-        sprintf "function(%s)\nlocal %s\n%s\nreturn %s\nend" name var (emitExpr (Some var) map body) var
-    | ELet (EVar name, value, body) ->
+        sprintf "function(%s)\nlocal %s\n%s\nreturn %s\nend" name var (emitExpr (Some var) map body.Value) var
+    | ELet ({Value = EVar name}, value, body) ->
         match oAssignVar with
-        | None when isStatement value ->
-            sprintf "local %s\n%s\n%s" name (emitExpr (Some name) map value) (emitExpr oAssignVar map body)
+        | None when isStatement value.Value ->
+            sprintf "local %s\n%s\n%s" name (emitExpr (Some name) map value.Value) (emitExpr oAssignVar map body.Value)
         | Some assignName when assignName = name -> 
-            sprintf "%s = %s\n%s" name (emitExpr None map value) (emitExpr oAssignVar map body)
+            sprintf "%s = %s\n%s" name (emitExpr None map value.Value) (emitExpr oAssignVar map body.Value)
         | _ ->
-            sprintf "local %s = %s\n%s" name (emitExpr None map value) (emitExpr oAssignVar map body)
+            sprintf "local %s = %s\n%s" name (emitExpr None map value.Value) (emitExpr oAssignVar map body.Value)
     | ERecordSelect (record, field) ->
-        sprintf "%s.%s" (emitExpr None map record) field
+        sprintf "%s.%s" (emitExpr None map record.Value) field
     | ERecordExtend (field, value, record) ->
-        sprintf "table.add(%s, '%s', %s)" (emitExpr None map record) field (emitExpr None map value)
+        sprintf "table.add(%s, '%s', %s)" (emitExpr None map record.Value) field (emitExpr None map value.Value)
     | ERecordRestrict (record, field) ->
-        sprintf "table.remove(%s, '%s')" (emitExpr None map record) field
+        sprintf "table.remove(%s, '%s')" (emitExpr None map record.Value) field
     | ERecordEmpty -> "{}"
     | EVariant (name, value) ->
-        sprintf "{ variant_name = '%s', variant_%s = %s }" name name (emitExpr None map value)
+        sprintf "{ variant_name = '%s', variant_%s = %s }" name name (emitExpr None map value.Value)
     | ECase (value, cases, oDefault) ->
-        emitCaseExpr oAssignVar map value cases oDefault
+        emitCaseExpr oAssignVar map value.Value cases oDefault
     | EIfThenElse (i, t, e) ->
         match oAssignVar with
         | None -> 
             let var = getNewVar ()
-            sprintf "local %s\nif %s then\n%s\nelse\n%s\nend" var (emitExpr None map i) (emitExpr (Some var) map t) (emitExpr (Some var) map e)
+            sprintf "local %s\nif %s then\n%s\nelse\n%s\nend" var (emitExpr None map i.Value) (emitExpr (Some var) map t.Value) (emitExpr (Some var) map e.Value)
         | Some var -> 
             let var = getVar var
-            sprintf "if %s then\n%s\nelse\n%s\nend" (emitExpr None map i) (emitExpr (Some var) map t) (emitExpr (Some var) map e)
+            sprintf "if %s then\n%s\nelse\n%s\nend" (emitExpr None map i.Value) (emitExpr (Some var) map t.Value) (emitExpr (Some var) map e.Value)
     | EBinOp (l, op, r) ->
-        sprintf "%s %s %s" (emitExpr None map l) (emitBinop op) (emitExpr None map r)
+        sprintf "%s %s %s" (emitExpr None map l.Value) (emitBinop op) (emitExpr None map r.Value)
     | EUnOp (op, e) ->
-        sprintf "%s%s" (emitUnop op) (emitExpr None map e)
+        sprintf "%s%s" (emitUnop op) (emitExpr None map e.Value)
     | EFix name -> sprintf "fix(%s)" name
     // | EListEmpty
     // | EListCons of Expr * Expr
     // | EOpen of string
     // | EType of Expr * Ty
-    | EPrint e -> sprintf "print(%s)" (emitExpr None map e)
+    | EPrint e -> sprintf "print(%s)" (emitExpr None map e.Value)
     | _ -> failwithf "impossible, got %O" expr
 
     |> (fun result ->

@@ -1,8 +1,22 @@
 module ParserUtil
 
 open FParsec
+open FParsec.CharParsers
+
+open Expr
 
 type Parser<'t> = Parser<'t, unit>
+
+let locate file p =
+    pipe3 getPosition p getPosition (fun p1 value p2 ->
+        {
+            Filename = file
+            Start = { Line = int p1.Line; Column = int p1.Column }
+            End = { Line = int p2.Line; Column = int p2.Column }
+            Value = value
+        }
+    )
+
 
 let (<!>) (p: Parser<_>) label : Parser<_> =
     fun stream ->
