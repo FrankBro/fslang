@@ -24,6 +24,14 @@ type Located<'t> = {
 with
     override x.ToString () = x.Value.ToString()
 
+module Located =
+    let map f x = {
+        Filename = x.Filename
+        Start = x.Start
+        End = x.End
+        Value = f x.Value
+    }
+
 type Ty =
     | TConst of Name
     | TBool

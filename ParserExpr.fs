@@ -90,12 +90,11 @@ let parseFun file : Parser<Located<Expr>> =
         (patterns, body)
         ||> List.foldBack (fun pattern state ->
             EFun (pattern, state)
-            |> locate file
         )
     )
 
-let parseVar = 
-    identWs |>> EVar
+let parseVar file = 
+    identWs file |>> Located.map EVar
 
 let parseParen element = 
     between (strWs "(") (strWs ")") element
@@ -152,8 +151,8 @@ let parseLetRec =
         ELet (EVar ("_" + name), EFun (EVar name, value), ELet (EVar name, EFix ("_" + name), body))
     )
 
-let parseVariant =
-    strWs ":" >>. identWs .>>. parseExprWs
+let parseVariant file =
+    strWs ":" >>. identWs file .>>. parseExprWs
     |>> EVariant
 
 let parseMatchNormalCase : Parser<Pattern * Expr * Guard option> =
