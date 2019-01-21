@@ -236,14 +236,14 @@ let rec inferExpr files env level = function
     | EError _ -> newVar level
     | EPrint e -> TRecord TRowEmpty
     | EType (e, t) ->
-        let infered = inferExpr files env level e
+        let infered = inferExpr files env level e.Value
         unify infered t
         infered
     | EOpen filename -> Map.find filename files
     | EListEmpty -> TList (newVar level)
     | EListCons (x, xs) -> 
-        let xTy = TList (inferExpr files env level x)
-        let xsTy = inferExpr files env level xs
+        let xTy = TList (inferExpr files env level x.Value)
+        let xsTy = inferExpr files env level xs.Value
         unify xTy xsTy
         xTy
     | EFix name -> 
@@ -272,21 +272,21 @@ let rec inferExpr files env level = function
             raise (genericError (VariableNotFound name))
         )
     | ELet (pattern, valueExpr, bodyExpr) ->
-        let varTy = inferExpr files env (level + 1) valueExpr
+        let varTy = inferExpr files env (level + 1) valueExpr.Value
         let generalizedTy = generalizeTy level varTy
         let patternTy, bodyEnv = inferPattern files env level pattern
         unify patternTy generalizedTy
-        inferExpr files bodyEnv level bodyExpr
+        inferExpr files bodyEnv level bodyExpr.Value
     | ECall (fnExpr, argExpr) ->
         let paramTy, returnTy =
-            matchFunTy (inferExpr files env level fnExpr)
-        let argTy = inferExpr files env level argExpr
+            matchFunTy (inferExpr files env level fnExpr.Value)
+        let argTy = inferExpr files env level argExpr.Value
         unify paramTy argTy
         returnTy
     | EIfThenElse (ifExpr, thenExpr, elseExpr) ->
-        let a = inferExpr files env (level + 1) ifExpr
-        let b = inferExpr files env (level + 1) thenExpr
-        let c = inferExpr files env (level + 1) elseExpr
+        let a = inferExpr files env (level + 1) ifExpr.Value
+        let b = inferExpr files env (level + 1) thenExpr.Value
+        let c = inferExpr files env (level + 1) elseExpr.Value
         unify a TBool
         match a with
         | TBool | TVar {contents = Link TBool} -> ()
@@ -295,22 +295,22 @@ let rec inferExpr files env level = function
         unify b c
         c
     | EBinOp (a, op, b) ->
-        let a = inferExpr files env (level + 1) a
-        let b = inferExpr files env (level + 1) b
+        let a = inferExpr files env (level + 1) a.Value
+        let b = inferExpr files env (level + 1) b.Value
         unify a b
         match op with
         | Equal | NotEqual | Greater 
         | GreaterEqual | Lesser | LesserEqual -> TBool
         | _ -> b
     | EUnOp (op, a) ->
-        let a = inferExpr files env (level + 1) a
+        let a = inferExpr files env (level + 1) a.Value
         match op with
         | Negative -> a
     | EFun (pattern, bodyExpr) ->
         let paramTy = newVar level
         let patternTy, fnEnv = inferPattern files env level pattern
         unify patternTy paramTy
-        let returnTy = inferExpr files fnEnv level bodyExpr
+        let returnTy = inferExpr files fnEnv level bodyExpr.Value
         TArrow (paramTy, returnTy)
     | ERecordEmpty -> TRecord TRowEmpty
     | ERecordSelect (recordExpr, label) ->
@@ -318,14 +318,14 @@ let rec inferExpr files env level = function
         let fieldTy = newVar level
         let paramTy = TRecord (TRowExtend(label, fieldTy, restRowTy))
         let returnTy = fieldTy
-        unify paramTy (inferExpr files env level recordExpr)
+        unify paramTy (inferExpr files env level recordExpr.Value)
         returnTy
     | ERecordRestrict (recordExpr, label) ->
         let restRowTy = newRowVar level Set.empty // Used to be Set.singleton label
         let fieldTy = newVar level
         let paramTy = TRecord (TRowExtend(label, fieldTy, restRowTy))
         let returnTy = TRecord restRowTy
-        unify paramTy (inferExpr files env level recordExpr)
+        unify paramTy (inferExpr files env level recordExpr.Value)
         returnTy
     | ERecordExtend (label, expr, recordExpr) ->
         let restRowTy = newRowVar level (Set.singleton label)
@@ -333,15 +333,15 @@ let rec inferExpr files env level = function
         let param1Ty = fieldTy
         let param2Ty = TRecord restRowTy
         let returnTy = TRecord (TRowExtend (label, fieldTy, restRowTy))
-        unify param1Ty (inferExpr files env level expr)
-        unify param2Ty (inferExpr files env level recordExpr)
+        unify param1Ty (inferExpr files env level expr.Value)
+        unify param2Ty (inferExpr files env level recordExpr.Value)
         returnTy
     | EVariant (label, expr) ->
         let restRowTy = newRowVar level (Set.singleton label)
         let variantTy = newVar level
         let paramTy = variantTy in
         let returnTy = TVariant (TRowExtend (label, variantTy, restRowTy))
-        unify paramTy (inferExpr files env level expr)
+        unify paramTy (inferExpr files env level expr.Value)
         returnTy
     | ECase (expr, cases, oDefault) ->
         match tryMakeVariantCases cases with
@@ -359,32 +359,32 @@ let rec inferExpr files env level = function
                     let defaultVariantTy = newRowVar level constraints
                     let valueTy = TVariant defaultVariantTy
                     let env = Map.add name valueTy env
-                    let returnTy = inferExpr files env level defaultExpr
+                    let returnTy = inferExpr files env level defaultExpr.Value
                     defaultVariantTy, returnTy
-            let exprTy = inferExpr files env level expr
+            let exprTy = inferExpr files env level expr.Value
             let casesRow = inferVariantCases files env level returnTy defTy cases
             unify exprTy (TVariant casesRow)
             returnTy
         | None ->
-            let exprTy = inferExpr files env level expr
+            let exprTy = inferExpr files env level expr.Value
             let returnTy =
                 match oDefault with
                 | None -> newVar level
                 | Some (name, defaultExpr) ->
                     let valueTy = newVar level
                     let env = Map.add name valueTy env
-                    inferExpr files env level defaultExpr
+                    inferExpr files env level defaultExpr.Value
             let casesExprReturn =
                 cases
                 |> List.iter (fun (pattern, expr, oGuard) ->
                     let patternTy, env = inferPattern files env level pattern
                     oGuard
                     |> Option.iter (fun guard ->
-                        let a = inferExpr files env level guard
+                        let a = inferExpr files env level guard.Value
                         unify a TBool
                     )
                     unify patternTy exprTy
-                    let localReturnTy = inferExpr files env level expr
+                    let localReturnTy = inferExpr files env level expr.Value
                     unify localReturnTy returnTy
                 )
             returnTy
@@ -397,11 +397,11 @@ and inferVariantCases files env level returnTy restRowTy cases =
         let patternTy, caseEnv = inferPattern files env level pattern
         oGuard
         |> Option.iter (fun guard ->
-            let a = inferExpr files caseEnv level guard
+            let a = inferExpr files caseEnv level guard.Value
             unify a TBool
         )
         unify patternTy variantTy
-        unify returnTy (inferExpr files caseEnv level expr)
+        unify returnTy (inferExpr files caseEnv level expr.Value)
         let otherCasesRow = inferVariantCases files env level returnTy restRowTy otherCases
         TRowExtend (label, variantTy, otherCasesRow)
 
@@ -409,14 +409,14 @@ and inferPattern files (env: Map<Name, Ty>) (level: int) pattern =
     let rec loop env pattern =
         match pattern with
         | EType (e, t) ->
-            let infered, env = loop env e
+            let infered, env = loop env e.Value
             unify infered t
             infered, env
         | EListEmpty -> TList (newVar level), env
         | EListCons (x, xs) -> 
-            let singleTy, env = loop env x
+            let singleTy, env = loop env x.Value
             let xTy = TList singleTy
-            let multipleTy, env = loop env xs
+            let multipleTy, env = loop env xs.Value
             let xsTy = multipleTy
             unify xTy xsTy
             xTy, env
@@ -437,7 +437,7 @@ and inferPattern files (env: Map<Name, Ty>) (level: int) pattern =
             let infer1Ty, env = inferPattern files env level expr
             unify param1Ty infer1Ty
             let env =
-                match rest with
+                match rest.Value with
                 | ERecordEmpty -> env
                 | _ ->
                     let infer2Ty, env = inferPattern files env level rest
@@ -456,7 +456,7 @@ and inferPattern files (env: Map<Name, Ty>) (level: int) pattern =
             (returnTy, env)
         | _ ->
             raise (genericError (InvalidPattern pattern))
-    loop env pattern
+    loop env pattern.Value
 
 let infer files expr =
     inferExpr files Map.empty 0 expr

@@ -18,7 +18,7 @@ let ``Positive integer`` () =
 let ``Negative integer`` () =
     test 
         "-1"
-        (POk (EUnOp (Negative, EInt 1)))
+        (POk (eUnOp (Negative, EInt 1)))
         (IOk "int")
         (EOk (VInt -1))
 
@@ -34,7 +34,7 @@ let ``Positive float`` () =
 let ``Negative float`` () =
     test 
         "-3.14"
-        (POk (EUnOp (Negative, EFloat 3.14)))
+        (POk (eUnOp (Negative, EFloat 3.14)))
         (IOk "float")
         (EOk (VFloat -3.14))
 
@@ -74,7 +74,7 @@ let ``Unbound variable`` () =
 let ``Simple function call`` () =
     test
         "f x"
-        (POk (ECall (EVar "f", EVar "x")))
+        (POk (eCall (EVar "f", EVar "x")))
         (IFail (g (VariableNotFound "f")))
         (EFail (g (VariableNotFound "f")))
 
@@ -82,7 +82,7 @@ let ``Simple function call`` () =
 let ``Function call with multiple args`` () =
     test
         "f x y"
-        (POk (ECall (ECall (EVar "f", EVar "x"), EVar "y")))
+        (POk (eCall (eCall (EVar "f", EVar "x"), EVar "y")))
         (IFail (g (VariableNotFound "f")))
         (EFail (g (VariableNotFound "f")))
 
@@ -90,7 +90,7 @@ let ``Function call with multiple args`` () =
 let ``Simple let`` () =
     test
         "let a = 1 in a"
-        (POk (ELet (EVar "a", EInt 1, EVar "a")))
+        (POk (eLet (EVar "a", EInt 1, EVar "a")))
         (IOk "int")
         (EOk (VInt 1))
 
@@ -98,7 +98,7 @@ let ``Simple let`` () =
 let ``Let call function`` () =
     test
         "let f = fun a -> a in f 1"
-        (POk (ELet (EVar "f", EFun (EVar "a", EVar "a"), ECall (EVar "f", EInt 1))))
+        (POk (eLet (EVar "f", eFun (EVar "a", EVar "a"), eCall (EVar "f", EInt 1))))
         (IOk "int")
         (EOk (VInt 1))
 
@@ -114,7 +114,7 @@ let ``Empty record`` () =
 let ``Record restrict`` () =
     test
         "let r = { a = 1 } in r\\a"
-        (POk (ELet (EVar "r", eRecord ["a", EInt 1], ERecordRestrict (EVar "r", "a"))))
+        (POk (eLet (EVar "r", eRecord ["a", EInt 1], eRecordRestrict (EVar "r", "a"))))
         (IOk "{}")
         (EOk (vRecord []))
 
@@ -122,7 +122,7 @@ let ``Record restrict`` () =
 let ``Record extend`` () =
     test
         "let r = { a = 1 } in { b = 2 | r }"
-        (POk (ELet (EVar "r", eRecord ["a", EInt 1], ERecordExtend ("b", EInt 2, EVar "r"))))
+        (POk (eLet (EVar "r", eRecord ["a", EInt 1], eRecordWith (EVar "r", ["b", EInt 2]))))
         (IOk "{a : int, b : int}")
         (EOk (vRecord ["a", VInt 1; "b", VInt 2]))
 
@@ -130,7 +130,7 @@ let ``Record extend`` () =
 let ``Record select`` () =
     test
         "let r = { a = 1 } in r.a"
-        (POk (ELet (EVar "r", eRecord ["a", EInt 1], ERecordSelect (EVar "r", "a"))))
+        (POk (eLet (EVar "r", eRecord ["a", EInt 1], eRecordSelect (EVar "r", "a"))))
         (IOk "int")
         (EOk (VInt 1))
 
@@ -138,7 +138,7 @@ let ``Record select`` () =
 let ``Variant`` () =
     test
         ":a 1"
-        (POk (EVariant ("a", EInt 1)))
+        (POk (eVariant ("a", EInt 1)))
         (IOk "forall r. (r\\a) => <a : int | r>")
         (EOk (VVariant ("a", VInt 1)))
 
@@ -146,7 +146,7 @@ let ``Variant`` () =
 let ``If then else`` () =
     test
         "if true then 1 else 0"
-        (POk (EIfThenElse (EBool true, EInt 1, EInt 0)))
+        (POk (eIfThenElse (EBool true, EInt 1, EInt 0)))
         (IOk "int")
         (EOk (VInt 1))
 
@@ -154,7 +154,7 @@ let ``If then else`` () =
 let ``If value must be bool`` () =
     test
         "if 1 then 1 else 0"
-        (POk (EIfThenElse (EInt 1, EInt 1, EInt 0)))
+        (POk (eIfThenElse (EInt 1, EInt 1, EInt 0)))
         (IFail (i (UnifyFail (TInt, TBool))))
         (EFail (g IfValueNotBoolean))
 
@@ -162,7 +162,7 @@ let ``If value must be bool`` () =
 let ``Plus integer`` () =
     test
         "1 + 2"
-        (POk (EBinOp (EInt 1, Plus, EInt 2)))
+        (POk (eBinOp (EInt 1, Plus, EInt 2)))
         (IOk "int")
         (EOk (VInt 3))
 
@@ -170,7 +170,7 @@ let ``Plus integer`` () =
 let ``Plus float`` () =
     test
         "1. + 2."
-        (POk (EBinOp (EFloat 1., Plus, EFloat 2.)))
+        (POk (eBinOp (EFloat 1., Plus, EFloat 2.)))
         (IOk "float")
         (EOk (VFloat 3.))
 
@@ -178,7 +178,7 @@ let ``Plus float`` () =
 let ``Binop fail`` () =
     test
         "1 + 2."
-        (POk (EBinOp (EInt 1, Plus, EFloat 2.)))
+        (POk (eBinOp (EInt 1, Plus, EFloat 2.)))
         (IFail (i (UnifyFail (TInt, TFloat))))
         (EFail (e BadBinOp))
 
@@ -186,7 +186,7 @@ let ``Binop fail`` () =
 let ``Minus integer`` () =
     test
         "3 - 2"
-        (POk (EBinOp (EInt 3, Minus, EInt 2)))
+        (POk (eBinOp (EInt 3, Minus, EInt 2)))
         (IOk "int")
         (EOk (VInt 1))
 
@@ -194,7 +194,7 @@ let ``Minus integer`` () =
 let ``Minus float`` () =
     test
         "3. - 2."
-        (POk (EBinOp (EFloat 3., Minus, EFloat 2.)))
+        (POk (eBinOp (EFloat 3., Minus, EFloat 2.)))
         (IOk "float")
         (EOk (VFloat 1.))
 
@@ -202,7 +202,7 @@ let ``Minus float`` () =
 let ``Multiply integer`` () =
     test
         "3 * 2"
-        (POk (EBinOp (EInt 3, Multiply, EInt 2)))
+        (POk (eBinOp (EInt 3, Multiply, EInt 2)))
         (IOk "int")
         (EOk (VInt 6))
 
@@ -210,7 +210,7 @@ let ``Multiply integer`` () =
 let ``Multiply float`` () =
     test
         "3. * 2."
-        (POk (EBinOp (EFloat 3., Multiply, EFloat 2.)))
+        (POk (eBinOp (EFloat 3., Multiply, EFloat 2.)))
         (IOk "float")
         (EOk (VFloat 6.))
 
@@ -218,7 +218,7 @@ let ``Multiply float`` () =
 let ``Divide integer`` () =
     test
         "6 / 2"
-        (POk (EBinOp (EInt 6, Divide, EInt 2)))
+        (POk (eBinOp (EInt 6, Divide, EInt 2)))
         (IOk "int")
         (EOk (VInt 3))
 
@@ -226,7 +226,7 @@ let ``Divide integer`` () =
 let ``Divide float`` () =
     test
         "6. / 2."
-        (POk (EBinOp (EFloat 6., Divide, EFloat 2.)))
+        (POk (eBinOp (EFloat 6., Divide, EFloat 2.)))
         (IOk "float")
         (EOk (VFloat 3.))
     
@@ -234,7 +234,7 @@ let ``Divide float`` () =
 let ``And true`` () =
     test
         "true && true"
-        (POk (EBinOp (EBool true, And, EBool true)))
+        (POk (eBinOp (EBool true, And, EBool true)))
         (IOk "bool")
         (EOk (VBool true))
 
@@ -242,7 +242,7 @@ let ``And true`` () =
 let ``And false`` () =
     test
         "true && false"
-        (POk (EBinOp (EBool true, And, EBool false)))
+        (POk (eBinOp (EBool true, And, EBool false)))
         (IOk "bool")
         (EOk (VBool false))
 
@@ -250,7 +250,7 @@ let ``And false`` () =
 let ``Or true`` () =
     test
         "true || false"
-        (POk (EBinOp (EBool true, Or, EBool false)))
+        (POk (eBinOp (EBool true, Or, EBool false)))
         (IOk "bool")
         (EOk (VBool true))
 
@@ -258,7 +258,7 @@ let ``Or true`` () =
 let ``Or false`` () =
     test
         "false || false"
-        (POk (EBinOp (EBool false, Or, EBool false)))
+        (POk (eBinOp (EBool false, Or, EBool false)))
         (IOk "bool")
         (EOk (VBool false))
 
@@ -266,7 +266,7 @@ let ``Or false`` () =
 let ``Integer Equal true`` () =
     test
         "1 = 1"
-        (POk (EBinOp (EInt 1, Equal, EInt 1)))
+        (POk (eBinOp (EInt 1, Equal, EInt 1)))
         (IOk "bool")
         (EOk (VBool true))
 
@@ -274,7 +274,7 @@ let ``Integer Equal true`` () =
 let ``Integer Equal false`` () =
     test
         "1 = 2"
-        (POk (EBinOp (EInt 1, Equal, EInt 2)))
+        (POk (eBinOp (EInt 1, Equal, EInt 2)))
         (IOk "bool")
         (EOk (VBool false))
 
@@ -282,7 +282,7 @@ let ``Integer Equal false`` () =
 let ``Float Equal true`` () =
     test
         "1. = 1."
-        (POk (EBinOp (EFloat 1., Equal, EFloat 1.)))
+        (POk (eBinOp (EFloat 1., Equal, EFloat 1.)))
         (IOk "bool")
         (EOk (VBool true))
 
@@ -290,7 +290,7 @@ let ``Float Equal true`` () =
 let ``Float Equal false`` () =
     test
         "1. = 2."
-        (POk (EBinOp (EFloat 1., Equal, EFloat 2.)))
+        (POk (eBinOp (EFloat 1., Equal, EFloat 2.)))
         (IOk "bool")
         (EOk (VBool false))
 
@@ -298,7 +298,7 @@ let ``Float Equal false`` () =
 let ``Bool Equal true`` () =
     test
         "true = true"
-        (POk (EBinOp (EBool true, Equal, EBool true)))
+        (POk (eBinOp (EBool true, Equal, EBool true)))
         (IOk "bool")
         (EOk (VBool true))
 
@@ -306,7 +306,7 @@ let ``Bool Equal true`` () =
 let ``Bool Equal false`` () =
     test
         "true = false"
-        (POk (EBinOp (EBool true, Equal, EBool false)))
+        (POk (eBinOp (EBool true, Equal, EBool false)))
         (IOk "bool")
         (EOk (VBool false))
 
@@ -314,7 +314,7 @@ let ``Bool Equal false`` () =
 let ``Integer NotEqual true`` () =
     test
         "1 <> 2"
-        (POk (EBinOp (EInt 1, NotEqual, EInt 2)))
+        (POk (eBinOp (EInt 1, NotEqual, EInt 2)))
         (IOk "bool")
         (EOk (VBool true))
 
@@ -322,7 +322,7 @@ let ``Integer NotEqual true`` () =
 let ``Integer NotEqual false`` () =
     test
         "1 <> 1"
-        (POk (EBinOp (EInt 1, NotEqual, EInt 1)))
+        (POk (eBinOp (EInt 1, NotEqual, EInt 1)))
         (IOk "bool")
         (EOk (VBool false))
 
@@ -330,7 +330,7 @@ let ``Integer NotEqual false`` () =
 let ``Float NotEqual true`` () =
     test
         "1. <> 2."
-        (POk (EBinOp (EFloat 1., NotEqual, EFloat 2.)))
+        (POk (eBinOp (EFloat 1., NotEqual, EFloat 2.)))
         (IOk "bool")
         (EOk (VBool true))
 
@@ -338,7 +338,7 @@ let ``Float NotEqual true`` () =
 let ``Float NotEqual false`` () =
     test
         "1. <> 1."
-        (POk (EBinOp (EFloat 1., NotEqual, EFloat 1.)))
+        (POk (eBinOp (EFloat 1., NotEqual, EFloat 1.)))
         (IOk "bool")
         (EOk (VBool false))
 
@@ -346,7 +346,7 @@ let ``Float NotEqual false`` () =
 let ``Bool NotEqual true`` () =
     test
         "true <> false"
-        (POk (EBinOp (EBool true, NotEqual, EBool false)))
+        (POk (eBinOp (EBool true, NotEqual, EBool false)))
         (IOk "bool")
         (EOk (VBool true))
 
@@ -354,7 +354,7 @@ let ``Bool NotEqual true`` () =
 let ``Bool NotEqual false`` () =
     test
         "true <> true"
-        (POk (EBinOp (EBool true, NotEqual, EBool true)))
+        (POk (eBinOp (EBool true, NotEqual, EBool true)))
         (IOk "bool")
         (EOk (VBool false))
 
@@ -362,7 +362,7 @@ let ``Bool NotEqual false`` () =
 let ``Integer Greater true`` () =
     test
         "2 > 1"
-        (POk (EBinOp (EInt 2, Greater, EInt 1)))
+        (POk (eBinOp (EInt 2, Greater, EInt 1)))
         (IOk "bool")
         (EOk (VBool true))
 
@@ -370,7 +370,7 @@ let ``Integer Greater true`` () =
 let ``Integer Greater false`` () =
     test
         "1 > 2"
-        (POk (EBinOp (EInt 1, Greater, EInt 2)))
+        (POk (eBinOp (EInt 1, Greater, EInt 2)))
         (IOk "bool")
         (EOk (VBool false))
 
@@ -378,7 +378,7 @@ let ``Integer Greater false`` () =
 let ``Float Greater true`` () =
     test
         "2. > 1."
-        (POk (EBinOp (EFloat 2., Greater, EFloat 1.)))
+        (POk (eBinOp (EFloat 2., Greater, EFloat 1.)))
         (IOk "bool")
         (EOk (VBool true))
 
@@ -386,7 +386,7 @@ let ``Float Greater true`` () =
 let ``Float Greater false`` () =
     test
         "1. > 2."
-        (POk (EBinOp (EFloat 1., Greater, EFloat 2.)))
+        (POk (eBinOp (EFloat 1., Greater, EFloat 2.)))
         (IOk "bool")
         (EOk (VBool false))
 
@@ -394,7 +394,7 @@ let ``Float Greater false`` () =
 let ``Integer GreaterEqual true`` () =
     test
         "2 >= 2"
-        (POk (EBinOp (EInt 2, GreaterEqual, EInt 2)))
+        (POk (eBinOp (EInt 2, GreaterEqual, EInt 2)))
         (IOk "bool")
         (EOk (VBool true))
 
@@ -402,7 +402,7 @@ let ``Integer GreaterEqual true`` () =
 let ``Integer GreaterEqual false`` () =
     test
         "1 >= 2"
-        (POk (EBinOp (EInt 1, GreaterEqual, EInt 2)))
+        (POk (eBinOp (EInt 1, GreaterEqual, EInt 2)))
         (IOk "bool")
         (EOk (VBool false))
 
@@ -410,7 +410,7 @@ let ``Integer GreaterEqual false`` () =
 let ``Float GreaterEqual true`` () =
     test
         "2. >= 2."
-        (POk (EBinOp (EFloat 2., GreaterEqual, EFloat 2.)))
+        (POk (eBinOp (EFloat 2., GreaterEqual, EFloat 2.)))
         (IOk "bool")
         (EOk (VBool true))
 
@@ -418,7 +418,7 @@ let ``Float GreaterEqual true`` () =
 let ``Float GreaterEqual false`` () =
     test
         "1. >= 2."
-        (POk (EBinOp (EFloat 1., GreaterEqual, EFloat 2.)))
+        (POk (eBinOp (EFloat 1., GreaterEqual, EFloat 2.)))
         (IOk "bool")
         (EOk (VBool false))
 
@@ -426,7 +426,7 @@ let ``Float GreaterEqual false`` () =
 let ``Integer Lesser true`` () =
     test
         "2 < 3"
-        (POk (EBinOp (EInt 2, Lesser, EInt 3)))
+        (POk (eBinOp (EInt 2, Lesser, EInt 3)))
         (IOk "bool")
         (EOk (VBool true))
 
@@ -434,7 +434,7 @@ let ``Integer Lesser true`` () =
 let ``Integer Lesser false`` () =
     test
         "3 < 2"
-        (POk (EBinOp (EInt 3, Lesser, EInt 2)))
+        (POk (eBinOp (EInt 3, Lesser, EInt 2)))
         (IOk "bool")
         (EOk (VBool false))
 
@@ -442,7 +442,7 @@ let ``Integer Lesser false`` () =
 let ``Float Lesser true`` () =
     test
         "2. < 3."
-        (POk (EBinOp (EFloat 2., Lesser, EFloat 3.)))
+        (POk (eBinOp (EFloat 2., Lesser, EFloat 3.)))
         (IOk "bool")
         (EOk (VBool true))
 
@@ -450,7 +450,7 @@ let ``Float Lesser true`` () =
 let ``Float Lesser false`` () =
     test
         "3. < 2."
-        (POk (EBinOp (EFloat 3., Lesser, EFloat 2.)))
+        (POk (eBinOp (EFloat 3., Lesser, EFloat 2.)))
         (IOk "bool")
         (EOk (VBool false))
 
@@ -458,7 +458,7 @@ let ``Float Lesser false`` () =
 let ``Integer LesserEqual true`` () =
     test
         "2 <= 2"
-        (POk (EBinOp (EInt 2, LesserEqual, EInt 2)))
+        (POk (eBinOp (EInt 2, LesserEqual, EInt 2)))
         (IOk "bool")
         (EOk (VBool true))
 
@@ -466,7 +466,7 @@ let ``Integer LesserEqual true`` () =
 let ``Integer LesserEqual false`` () =
     test
         "3 <= 2"
-        (POk (EBinOp (EInt 3, LesserEqual, EInt 2)))
+        (POk (eBinOp (EInt 3, LesserEqual, EInt 2)))
         (IOk "bool")
         (EOk (VBool false))
 
@@ -474,7 +474,7 @@ let ``Integer LesserEqual false`` () =
 let ``Float LesserEqual true`` () =
     test
         "2. <= 2."
-        (POk (EBinOp (EFloat 2., LesserEqual, EFloat 2.)))
+        (POk (eBinOp (EFloat 2., LesserEqual, EFloat 2.)))
         (IOk "bool")
         (EOk (VBool true))
 
@@ -482,7 +482,7 @@ let ``Float LesserEqual true`` () =
 let ``Float LesserEqual false`` () =
     test
         "3. <= 2."
-        (POk (EBinOp (EFloat 3., LesserEqual, EFloat 2.)))
+        (POk (eBinOp (EFloat 3., LesserEqual, EFloat 2.)))
         (IOk "bool")
         (EOk (VBool false))
 
@@ -498,6 +498,6 @@ let ``String`` () =
 let ``Print`` () =
     test
         "print 3"
-        (POk (EPrint (EInt 3)))
+        (POk (ePrint (EInt 3)))
         (IOk "{}")
         (EOk (VRecord Map.empty))

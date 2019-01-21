@@ -21,7 +21,7 @@ let rec transformRowBinding var body expr =
     | EFloat f -> failwith ""
     | EString s -> failwith ""
     | EVar _  -> body
-    | EVariant (_, EVar _) -> 
+    | EVariant (_, {Value = EVar _}) -> 
         ECase (EVar var, [expr, body, None], None)
     | EVariant (case, sub) ->
         let subVar = getNewVar ()

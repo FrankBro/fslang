@@ -59,11 +59,38 @@ let g e = OrdoError.Generic e
 let e e = OrdoError.Eval e
 let i e = OrdoError.Infer e
 
-let eRecord xs =
-    (ERecordEmpty, xs)
+let eLocated e = { Filename = "test"; Start = { Line = 0; Column = 0 }; End = { Line = 0; Column = 0}; Value = e }
+
+let eRecordWith (x, xs) =
+    (x, xs)
     ||> List.fold (fun record (label, value) ->
-        ERecordExtend (label, value, record)
+        ERecordExtend (label, eLocated value, eLocated record)
     )
+let eRecord xs = eRecordWith (ERecordEmpty, xs)
+
+let eVariant (name, value) = EVariant (name, eLocated value)
+let eCase (pattern, cases, oDefault) = 
+    let cases =
+        cases
+        |> List.map (fun (pattern, body, oGuard) ->
+            eLocated pattern, eLocated body, oGuard |> Option.map eLocated
+        )
+    ECase (eLocated pattern, cases, oDefault |> Option.map (fun (name, body) -> name, eLocated body))
+let eLet (pattern, value, body) = ELet (eLocated pattern, eLocated value, eLocated body)
+let eRecordSelect (record, name) = ERecordSelect (eLocated record, name)
+let eBinOp (a, op, b) = EBinOp (eLocated a, op, eLocated b)
+let eFun (pattern, body) = EFun (eLocated pattern, eLocated body)
+let eCall (fn, arg) = ECall (eLocated fn, eLocated arg)
+let eRecordRestrict (record, name) = ERecordRestrict (eLocated record, name)
+let eIfThenElse (i, t, e) = EIfThenElse (eLocated i, eLocated t, eLocated e)
+let eUnOp (op, e) = EUnOp (op, eLocated e)
+let eList xs = 
+    (EListEmpty, xs)
+    ||> List.fold (fun list element ->
+        EListCons (eLocated element, eLocated list)
+    )
+let eType (e, t) = EType (eLocated e, t)
+let ePrint e = EPrint (eLocated e)
 
 let tRecord xs =
     (TRowEmpty, xs)

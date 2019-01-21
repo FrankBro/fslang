@@ -24,11 +24,11 @@ let evalString (env: Env) expr : Env * string =
     try
         let ordoExpr = ParserExpr.readExpr expr
         match ordoExpr with
-        | EVariant ("rawtype", EVar name) ->
+        | EVariant ("rawtype", {Value = EVar name}) ->
             env, Map.find name env.Infer |> string
-        | EVariant ("type", EVar name) ->
+        | EVariant ("type", {Value = EVar name}) ->
             env, Map.find name env.Infer |> stringOfTy
-        | EVariant ("value", EVar name) ->
+        | EVariant ("value", {Value = EVar name}) ->
             env, Map.find name env.Eval |> string
         | _ ->
             let ordoTy = 
@@ -37,15 +37,15 @@ let evalString (env: Env) expr : Env * string =
             let ordoVal = Eval.evalExpr Map.empty env.Eval ordoExpr
             let env =
                 match ordoExpr with
-                | ELet (EVar name1, _, EVar name2) when name1 = name2 ->
+                | ELet ({Value = EVar name1}, _, {Value = EVar name2}) when name1 = name2 ->
                     {
                         Infer = Map.add name1 ordoTy env.Infer
                         Eval = Map.add name1 ordoVal env.Eval
                     }
-                | ELet (pat, _, ret) when pat = ret ->
+                | ELet (pat, _, {Value = ret}) when pat.Value = ret ->
                     let patTy, infered = inferPattern Map.empty env.Infer 0 pat
                     unify ordoTy patTy
-                    let matches, evaled = evalPattern env.Eval pat ordoVal
+                    let matches, evaled = evalPattern env.Eval pat.Value ordoVal
                     {
                         Infer = infered
                         Eval = evaled

@@ -416,12 +416,12 @@ let rec stringOfValue value =
             "[" + content + "]"
     f false value
 
-let tryMakeVariantCases cases =
+let tryMakeVariantCases (cases: (Located<Pattern> * Located<Expr> * Located<Guard> option) list) =
     let transformed =
         cases
         |> List.choose (fun case ->
             match case with
-            | EVariant (name, pattern), expr, guard -> 
+            | {Value = EVariant (name, pattern)}, expr, guard -> 
                 Some (name, pattern, expr, guard)
             | _ -> None
         )

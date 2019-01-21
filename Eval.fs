@@ -110,23 +110,23 @@ let rec evalExpr files (env: Map<string, Value>) (expr: Expr) : Value =
                         | None -> true
                         | Some guard ->
                             let matches, guardEnv = evalPattern env pattern.Value value
-                            match evalExpr files guardEnv guard with
+                            match evalExpr files guardEnv guard.Value with
                             | VBool value -> value && matches
-                            | _ -> raise (genericError (InvalidGuard guard))
+                            | _ -> raise (genericError (InvalidGuard guard.Value))
                     caseLabel = label && isGuardTrue () && patternMatches
                 )
-                |> Option.map (fun (_, pattern, expr, _) -> pattern, expr)
+                |> Option.map (fun (_, pattern, expr, _) -> pattern.Value, expr)
                 |> Option.defaultWith (fun () ->
                     oDefault
                     |> Option.map (fun (name, expr) -> EVar name, expr)
                     |> Option.defaultWith (fun () ->
-                        raise (evalError (MissingMatchCase valueExpr))
+                        raise (evalError (MissingMatchCase valueExpr.Value))
                     )
                 )
-            let matches, fnEnv = evalPattern env pattern.Value value
+            let matches, fnEnv = evalPattern env pattern value
             if not matches then
-                raise (genericError (InvalidPattern pattern.Value))
-            evalExpr files fnEnv expr
+                raise (genericError (InvalidPattern pattern))
+            evalExpr files fnEnv expr.Value
         | _ -> 
             let value = evalExpr files env valueExpr.Value
             let pattern, expr =
@@ -143,17 +143,17 @@ let rec evalExpr files (env: Map<string, Value>) (expr: Expr) : Value =
                             | _ -> raise (genericError (InvalidGuard guard.Value))
                     isGuardTrue () && patternMatches
                 )
-                |> Option.map (fun (pattern, expr, _) -> pattern, expr)
+                |> Option.map (fun (pattern, expr, _) -> pattern.Value, expr)
                 |> Option.defaultWith (fun () ->
                     oDefault
                     |> Option.map (fun (name, expr) -> EVar name, expr)
                     |> Option.defaultWith (fun () ->
-                        raise (evalError (MissingMatchCase valueExpr))
+                        raise (evalError (MissingMatchCase valueExpr.Value))
                     )
                 )
-            let matches, fnEnv = evalPattern env pattern.Value value
+            let matches, fnEnv = evalPattern env pattern value
             if not matches then
-                raise (genericError (InvalidPattern pattern.Value))
+                raise (genericError (InvalidPattern pattern))
             evalExpr files fnEnv expr.Value
     | EIfThenElse (ifExpr, thenExpr, elseExpr) ->
         let ifValue = evalExpr files env ifExpr.Value

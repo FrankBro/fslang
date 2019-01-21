@@ -90,6 +90,7 @@ let parseFun file : Parser<Located<Expr>> =
         (patterns, body)
         ||> List.foldBack (fun pattern state ->
             EFun (pattern, state)
+            |> locate file
         )
     )
 
