@@ -89,7 +89,9 @@ let parseFun file : Parser<Located<Expr>> =
     pipe2 p1 p2 (fun patterns body ->
         (patterns, body)
         ||> List.foldBack (fun pattern state ->
-            EFun (pattern, state)
+            { pattern with
+                Value = EFun (pattern, state)
+            }
         )
     )
 
@@ -99,21 +101,23 @@ let parseVar file =
 let parseParen element = 
     between (strWs "(") (strWs ")") element
 
-let parseLet = 
-    let p1 = strWs1 "let" >>. many1 parsePatternWs
-    let p2 = strWs "=" >>. parseExprWs
-    let p3 = opt (strWs1 "in" >>. parseExprWs)
+let parseLet file = 
+    let p1 = strWs1 "let" >>. many1 (locate file parsePatternWs)
+    let p2 = strWs "=" >>. locate file parseExprWs
+    let p3 = opt (strWs1 "in" >>. locate file parseExprWs)
     pipe3 p1 p2 p3 (fun patterns value oBody -> 
         let pattern, value =
             match patterns with
             | [pattern] -> pattern, value
-            | EVar name :: rest ->
+            | ({ Value = EVar name } as pattern) :: rest ->
                 let wrappedValue =
                     (rest, value)
                     ||> List.foldBack (fun pattern state ->
-                        EFun (pattern, state)
+                        { pattern with
+                            Value = EFun (pattern, state)
+                        }
                     )
-                EVar name, wrappedValue
+                pattern, wrappedValue
             | _ -> raise (parserError InvalidFunctionDeclaration)
         let body =
             oBody
@@ -125,19 +129,21 @@ let parseLet =
         ELet (pattern, value, body)
     )
 
-let parseLetRec = 
-    let p1 = strWs1 "let rec" >>. many1 parsePatternWs
-    let p2 = strWs "=" >>. parseExprWs
-    let p3 = opt (strWs1 "in" >>. parseExprWs)
+let parseLetRec file = 
+    let p1 = strWs1 "let rec" >>. many1 (locate file parsePatternWs)
+    let p2 = strWs "=" >>. locate file parseExprWs
+    let p3 = opt (strWs1 "in" >>. locate file parseExprWs)
     pipe3 p1 p2 p3 (fun patterns value oBody -> 
         let name, value =
             match patterns with
             | [pattern] -> raise (parserError InvalidLetRec)
-            | EVar name :: rest ->
+            | ({ Value = EVar name } as pattern) :: rest ->
                 let wrappedValue =
                     (rest, value)
                     ||> List.foldBack (fun pattern state ->
-                        EFun (pattern, state)
+                        { pattern with
+                            Value = EFun (pattern, state)
+                        }
                     )
                 name, wrappedValue
             | _ -> raise (parserError InvalidFunctionDeclaration)
@@ -152,8 +158,10 @@ let parseLetRec =
     )
 
 let parseVariant file =
-    strWs ":" >>. identWs file .>>. parseExprWs
-    |>> EVariant
+    strWs ":" >>. identWs file .>>. locate file parseExprWs
+    |>> (fun (name, expr) ->
+        Located.map (fun name -> EVariant (name, expr))
+    )
 
 let parseMatchNormalCase : Parser<Pattern * Expr * Guard option> =
     let pa = parsePatternWs
@@ -161,9 +169,9 @@ let parseMatchNormalCase : Parser<Pattern * Expr * Guard option> =
     let pc = strWs "->" >>. parseExprWs
     pipe3 pa pb pc (fun pattern guard expr -> (pattern, expr, guard))
 
-let parseMatchDefaultCase : Parser<string * Expr> =
-    let pa = identWs
-    let pb = strWs "->" >>. parseExprWs
+let parseMatchDefaultCase file : Parser<string * Expr> =
+    let pa = identWs file
+    let pb = strWs "->" >>. locate file parseExprWs
     pipe2 pa pb (fun var expr -> (var, expr))
 
 let parseMatch =
